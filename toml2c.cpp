@@ -5,6 +5,8 @@
 #include <functional>
 #include <toml++/toml.h>
 
+constexpr std::string_view lib_base_name = "t2c";
+
 constexpr std::string_view s_table = "struct {\n";
 constexpr std::string_view s_type_int = "int64_t ";
 constexpr std::string_view s_type_double = "double ";
@@ -284,10 +286,11 @@ void Writer::h_functions(const std::string& name) {
 #ifdef __cplusplus
 extern "C" {
 #endif
-int  t2c_)";
+int  )";
+    this->out += std::string(lib_base_name) + "_";
     this->out += base_name+"_read(const char* file, " +name+ "** "+base_name+");\n";
-    this->out += "void t2c_"+base_name+"_print(const "+name+"* "+base_name+");\n";
-    this->out += "void t2c_"+base_name+"_free("+name+"* "+base_name+");";
+    this->out += "void "+std::string(lib_base_name)+"_"+base_name+"_print(const "+name+"* "+base_name+");\n";
+    this->out += "void "+std::string(lib_base_name)+"_"+base_name+"_free("+name+"* "+base_name+");";
     this->out += R"(
 #ifdef __cplusplus
 }
@@ -296,7 +299,7 @@ int  t2c_)";
 
 void Writer::h_finalize(const std::string& name) {
     std::ofstream header;
-    header.open("t2c-"+name.substr(0, name.size()-2)+".h");
+    header.open(std::string(lib_base_name) + "-" + name.substr(0, name.size()-2)+".h");
     header << out;
     header.close();
 }
@@ -304,12 +307,13 @@ void Writer::h_finalize(const std::string& name) {
 void Writer::c_src(const Table& root) {
     const std::string& name = root.name;
     const std::string base_name = name.substr(0, name.size()-2);
-    this->out += "#include \"t2c-"+ base_name; 
+    this->out += "#include \"" + std::string(lib_base_name) + "-" + base_name; 
     this->out += R"(.h"
 #include <stdlib.h>
 #include <toml.h>
 
-int t2c_)";
+int )";
+    this->out += std::string(lib_base_name) + "_";
     this->out += base_name + "_read(const char* file_path, "+name+"** "+base_name+") {";
     this->out += R"(
     FILE* fp;
@@ -325,7 +329,7 @@ int t2c_)";
     /* Open the file. */
     if (0 == (fp = fopen(file_path, "r"))) {
         fprintf(stderr, ")";
-    this->out += "t2c_"+base_name;
+    this->out += std::string(lib_base_name) + "_" + base_name;
     this->out += R"(_read() failed: couldn't open %s", file_path);
         return 1;
     }
@@ -334,7 +338,7 @@ int t2c_)";
     root = toml_parse_file(fp, errbuf, sizeof(errbuf));
     if (0 == root) {
         fprintf(stderr, ")";
-    this->out += "t2c_"+base_name;
+    this->out += std::string(lib_base_name) + "_" + base_name;
     this->out += R"(_read() failed: error while parsing %s", file_path);
         return 1;
     }
@@ -394,7 +398,7 @@ int t2c_)";
     std::function<void(const Table&)> check_r;
     check_r = [&] (const Table& t)->void {
         this->out += "    if (!("+get_path(t,t.name)+" = toml_table_in("+get_parent_path(t,"")+", \""+tvar(t.name)+"\"))) {\n\
-        fprintf(stderr, \"t2c_"+base_name+"_read() failed: failed locating ["+t.name+"] table\");\n\
+        fprintf(stderr, \""+std::string(lib_base_name)+"_"+base_name+"_read() failed: failed locating ["+t.name+"] table\");\n\
         return 1;\n    }\n";
         for (const Table* c: t.children) {
             check_r(*c);
@@ -474,7 +478,7 @@ int t2c_)";
     read_r(root);
 
     this->out += "\n    toml_free(root);\n    return 0;\n}\n\n";
-    this->out += "void t2c_"+base_name+"_print(const "+name+"* "+base_name+") {\n";
+    this->out += "void "+std::string(lib_base_name)+"_"+base_name+"_print(const "+name+"* "+base_name+") {\n";
     this->out += "    printf(\"Read "+base_name+".toml values:\\n\");\n\n";
 
     std::function<void(const Table&)> print_r;
@@ -532,7 +536,7 @@ int t2c_)";
     print_r(root);
 
     this->out += "\n    fflush(stdout);\n}\n\n";
-    this->out += "    void t2c_"+base_name+"_free("+name+"* "+base_name+") {\n";
+    this->out += "    void "+std::string(lib_base_name)+"_"+base_name+"_free("+name+"* "+base_name+") {\n";
 
     std::function<void(const Table&)> free_r;
     free_r = [&] (const Table& t)->void {
@@ -567,7 +571,7 @@ int t2c_)";
 
 void Writer::c_finalize(const std::string& name) {
     std::ofstream src;
-    src.open("t2c-"+name.substr(0, name.size()-2)+".c");
+    src.open(std::string(lib_base_name)+"-"+name.substr(0, name.size()-2)+".c");
     src << out;
     src.close();
 }
