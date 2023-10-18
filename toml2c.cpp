@@ -277,7 +277,7 @@ void Writer::h_struct(const Table& t) {
     }
 
     mk_indent(t.depth);
-    this->out += "} " + t.name + ";\n";
+    this->out += "} " + cvar(t.name) + ";\n";
 }
 
 void Writer::h_functions(const std::string& name) {
@@ -357,7 +357,7 @@ int )";
             }
             return (get_path(*t.parent, path));
         }
-        return path;
+        return cvar(path);
     };
     std::function<std::string(const Table& t, std::string path)> get_parent_path;
     get_parent_path = [&get_parent_path](const Table& t, std::string path)->std::string {
@@ -369,7 +369,7 @@ int )";
             }
             return (get_parent_path(*t.parent, path));
         }
-        return path;
+        return cvar(path);
     };
 
     std::function<std::string(const Table& t, std::string path)> get_path_var;
@@ -378,7 +378,7 @@ int )";
             path = t.name + "." + path;
             return (get_path_var(*t.parent, path));
         }
-        return path;
+        return cvar(path);
     };
 
     std::function<void(const Table&)> decl_r;
