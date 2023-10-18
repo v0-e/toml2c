@@ -71,7 +71,7 @@ class Reader {
 
 struct Writer {
     public:
-        void write(const Table& root);
+        void write(const std::string& name, const Table& root);
 
     private:
         int mk_indent(int depth) {
@@ -81,15 +81,16 @@ struct Writer {
             }
             return out.size() - is;
         }
+        std::string o_name;
         std::string out;
     
         void h_header();
         void h_struct(const Table& t);
         void h_functions(const std::string& name);
-        void h_finalize(const std::string& name);
+        void h_finalize();
 
         void c_src(const Table& root);
-        void c_finalize(const std::string& name);
+        void c_finalize();
 };
 
 int Reader::parser(const std::string& file) {
@@ -297,9 +298,9 @@ int  )";
 #endif)";
 }
 
-void Writer::h_finalize(const std::string& name) {
+void Writer::h_finalize() {
     std::ofstream header;
-    header.open(std::string(lib_base_name) + "-" + name.substr(0, name.size()-2)+".h");
+    header.open(std::string(lib_base_name) + "-" + this->o_name +".h");
     header << out;
     header.close();
 }
@@ -307,7 +308,7 @@ void Writer::h_finalize(const std::string& name) {
 void Writer::c_src(const Table& root) {
     const std::string& name = root.name;
     const std::string base_name = name.substr(0, name.size()-2);
-    this->out += "#include \"" + std::string(lib_base_name) + "-" + base_name; 
+    this->out += "#include \"" + std::string(lib_base_name) + "-" + this->o_name; 
     this->out += R"(.h"
 #include <stdlib.h>
 #include <toml.h>
@@ -569,22 +570,34 @@ int )";
     this->out += "\n    free("+base_name+");\n}\n";
 }
 
-void Writer::c_finalize(const std::string& name) {
+void Writer::c_finalize() {
     std::ofstream src;
-    src.open(std::string(lib_base_name)+"-"+name.substr(0, name.size()-2)+".c");
+    src.open(std::string(lib_base_name)+"-"+this->o_name+".c");
     src << out;
     src.close();
 }
 
-void Writer::write(const Table& root) {
+void Writer::write(const std::string& name, const Table& root) {
+    this->o_name = name;
+    // Remove path
+    size_t pdir = this->o_name.find_last_of("\\/");
+    if (pdir != std::string::npos) {
+        this->o_name = this->o_name.substr(pdir+1);
+    }
+    // Remove extension
+    size_t pext = this->o_name.find(".toml");
+    if (pext != std::string::npos) {
+        this->o_name = this->o_name.substr(0, pext);
+    }
+
     this->h_header();
     this->h_struct(root);
     this->h_functions(root.name);
-    this->h_finalize(root.name);
+    this->h_finalize();
     this->out.clear();
 
     this->c_src(root);
-    this->c_finalize(root.name);
+    this->c_finalize();
     this->out.clear();
 }
 
@@ -601,7 +614,7 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    writer.write(reader.get_root());
+    writer.write(argv[1], reader.get_root());
 
     return 0;
 }
