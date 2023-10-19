@@ -288,10 +288,10 @@ void Writer::h_functions(const std::string& name) {
 extern "C" {
 #endif
 int  )";
-    this->out += std::string(lib_base_name) + "_";
+    this->out += lib_base_name.size() ? std::string(lib_base_name) + "_" : "";
     this->out += base_name+"_read(const char* file, " +name+ "** "+base_name+");\n";
-    this->out += "void "+std::string(lib_base_name)+"_"+base_name+"_print(const "+name+"* "+base_name+");\n";
-    this->out += "void "+std::string(lib_base_name)+"_"+base_name+"_free("+name+"* "+base_name+");";
+    this->out += "void "+ (lib_base_name.size() ? std::string(lib_base_name)+"_" : "") + base_name+"_print(const "+name+"* "+base_name+");\n";
+    this->out += "void "+ (lib_base_name.size() ? std::string(lib_base_name)+"_" : "") + base_name+"_free("+name+"* "+base_name+");";
     this->out += R"(
 #ifdef __cplusplus
 }
@@ -300,7 +300,7 @@ int  )";
 
 void Writer::h_finalize() {
     std::ofstream header;
-    header.open(std::string(lib_base_name) + "-" + this->o_name +".h");
+    header.open((lib_base_name.size() ? std::string(lib_base_name) + "-" : "") + this->o_name +".h");
     header << out;
     header.close();
 }
@@ -308,13 +308,13 @@ void Writer::h_finalize() {
 void Writer::c_src(const Table& root) {
     const std::string& name = root.name;
     const std::string base_name = name.substr(0, name.size()-2);
-    this->out += "#include \"" + std::string(lib_base_name) + "-" + this->o_name; 
+    this->out += "#include \"" + (lib_base_name.size() ? std::string(lib_base_name) + "-" : "") + this->o_name; 
     this->out += R"(.h"
 #include <stdlib.h>
 #include <toml.h>
 
 int )";
-    this->out += std::string(lib_base_name) + "_";
+    this->out += (lib_base_name.size() ? std::string(lib_base_name) + "_" : "");
     this->out += base_name + "_read(const char* file_path, "+name+"** "+base_name+") {";
     this->out += R"(
     FILE* fp;
@@ -330,7 +330,7 @@ int )";
     /* Open the file. */
     if (0 == (fp = fopen(file_path, "r"))) {
         fprintf(stderr, ")";
-    this->out += std::string(lib_base_name) + "_" + base_name;
+    this->out += (lib_base_name.size() ? std::string(lib_base_name) + "_" : "") + base_name;
     this->out += R"(_read() failed: couldn't open %s", file_path);
         return 1;
     }
@@ -339,7 +339,7 @@ int )";
     root = toml_parse_file(fp, errbuf, sizeof(errbuf));
     if (0 == root) {
         fprintf(stderr, ")";
-    this->out += std::string(lib_base_name) + "_" + base_name;
+    this->out += (lib_base_name.size() ? std::string(lib_base_name) + "_" : "") + base_name;
     this->out += R"(_read() failed: error while parsing %s", file_path);
         return 1;
     }
@@ -399,7 +399,8 @@ int )";
     std::function<void(const Table&)> check_r;
     check_r = [&] (const Table& t)->void {
         this->out += "    if (!("+get_path(t,t.name)+" = toml_table_in("+get_parent_path(t,"")+", \""+tvar(t.name)+"\"))) {\n\
-        fprintf(stderr, \""+std::string(lib_base_name)+"_"+base_name+"_read() failed: failed locating ["+t.name+"] table\");\n\
+        fprintf(stderr, \""+(lib_base_name.size()?std::string(lib_base_name)+"_":"")+
+        base_name+"_read() failed: failed locating ["+t.name+"] table\");\n\
         return 1;\n    }\n";
         for (const Table* c: t.children) {
             check_r(*c);
@@ -479,7 +480,8 @@ int )";
     read_r(root);
 
     this->out += "\n    toml_free(root);\n    return 0;\n}\n\n";
-    this->out += "void "+std::string(lib_base_name)+"_"+base_name+"_print(const "+name+"* "+base_name+") {\n";
+    this->out += "void "+(lib_base_name.size() ? std::string(lib_base_name)+"_" :"")+
+                 base_name+"_print(const "+name+"* "+base_name+") {\n";
     this->out += "    printf(\"Read "+base_name+".toml values:\\n\");\n\n";
 
     std::function<void(const Table&)> print_r;
@@ -537,7 +539,7 @@ int )";
     print_r(root);
 
     this->out += "\n    fflush(stdout);\n}\n\n";
-    this->out += "    void "+std::string(lib_base_name)+"_"+base_name+"_free("+name+"* "+base_name+") {\n";
+    this->out += "    void "+(lib_base_name.size()?std::string(lib_base_name)+"_":"")+base_name+"_free("+name+"* "+base_name+") {\n";
 
     std::function<void(const Table&)> free_r;
     free_r = [&] (const Table& t)->void {
@@ -572,7 +574,7 @@ int )";
 
 void Writer::c_finalize() {
     std::ofstream src;
-    src.open(std::string(lib_base_name)+"-"+this->o_name+".c");
+    src.open((lib_base_name.size()?std::string(lib_base_name)+"-":"")+this->o_name+".c");
     src << out;
     src.close();
 }
