@@ -6,6 +6,8 @@
 #include <toml++/toml.h>
 
 constexpr std::string_view lib_base_name = "t2c";
+#define LIB_BASE_NAMEu (lib_base_name.size() ? std::string(lib_base_name) + "_" : "")
+#define LIB_BASE_NAMEh (lib_base_name.size() ? std::string(lib_base_name) + "-" : "")
 
 constexpr std::string_view s_table = "struct {\n";
 constexpr std::string_view s_type_int = "int64_t ";
@@ -82,6 +84,7 @@ struct Writer {
             return out.size() - is;
         }
         std::string o_name;
+        std::string o_var;
         std::string out;
     
         void h_header();
@@ -119,6 +122,7 @@ int Reader::parser(const std::string& file) {
     this->c_depth = 0;
     s_name = cvar(s_name);
     s_name += "_t";
+    s_name = LIB_BASE_NAMEu + s_name;
 
     t.parent = NULL;
     t.name = s_name;
@@ -288,10 +292,9 @@ void Writer::h_functions(const std::string& name) {
 extern "C" {
 #endif
 int  )";
-    this->out += lib_base_name.size() ? std::string(lib_base_name) + "_" : "";
-    this->out += base_name+"_read(const char* file, " +name+ "** "+base_name+");\n";
-    this->out += "void "+ (lib_base_name.size() ? std::string(lib_base_name)+"_" : "") + base_name+"_print(const "+name+"* "+base_name+");\n";
-    this->out += "void "+ (lib_base_name.size() ? std::string(lib_base_name)+"_" : "") + base_name+"_free("+name+"* "+base_name+");";
+    this->out += base_name+"_read(const char* file, " + name + "** "+this->o_var+");\n";
+    this->out += "void "+ base_name+ "_print(const " + name+"* "+this->o_var+");\n";
+    this->out += "void "+ base_name+"_free("+ name+"* "+this->o_var+");";
     this->out += R"(
 #ifdef __cplusplus
 }
@@ -300,7 +303,7 @@ int  )";
 
 void Writer::h_finalize() {
     std::ofstream header;
-    header.open((lib_base_name.size() ? std::string(lib_base_name) + "-" : "") + this->o_name +".h");
+    header.open(LIB_BASE_NAMEh + this->o_name +".h");
     header << out;
     header.close();
 }
@@ -308,29 +311,28 @@ void Writer::h_finalize() {
 void Writer::c_src(const Table& root) {
     const std::string& name = root.name;
     const std::string base_name = name.substr(0, name.size()-2);
-    this->out += "#include \"" + (lib_base_name.size() ? std::string(lib_base_name) + "-" : "") + this->o_name; 
+    this->out += "#include \"" + LIB_BASE_NAMEh + this->o_name; 
     this->out += R"(.h"
 #include <stdlib.h>
 #include <toml.h>
 
 int )";
-    this->out += (lib_base_name.size() ? std::string(lib_base_name) + "_" : "");
-    this->out += base_name + "_read(const char* file_path, "+name+"** "+base_name+") {";
+    this->out += base_name + "_read(const char* file_path, "+name+"** "+this->o_var+") {";
     this->out += R"(
     FILE* fp;
     toml_table_t* root;
     char errbuf[200];
 
     if (*)";
-    this->out += base_name + " == NULL) {\n";
-    this->out += "        *"+base_name+" = calloc(1, sizeof("+name+"));\n";
+    this->out += this->o_var + " == NULL) {\n";
+    this->out += "        *"+this->o_var+" = calloc(1, sizeof("+name+"));\n";
     this->out += "    }\n";
     
     this->out += R"(
     /* Open the file. */
     if (0 == (fp = fopen(file_path, "r"))) {
         fprintf(stderr, ")";
-    this->out += (lib_base_name.size() ? std::string(lib_base_name) + "_" : "") + base_name;
+    this->out += base_name;
     this->out += R"(_read() failed: couldn't open %s", file_path);
         return 1;
     }
@@ -339,7 +341,7 @@ int )";
     root = toml_parse_file(fp, errbuf, sizeof(errbuf));
     if (0 == root) {
         fprintf(stderr, ")";
-    this->out += (lib_base_name.size() ? std::string(lib_base_name) + "_" : "") + base_name;
+    this->out += base_name;
     this->out += R"(_read() failed: error while parsing %s", file_path);
         return 1;
     }
@@ -399,8 +401,7 @@ int )";
     std::function<void(const Table&)> check_r;
     check_r = [&] (const Table& t)->void {
         this->out += "    if (!("+get_path(t,t.name)+" = toml_table_in("+get_parent_path(t,"")+", \""+tvar(t.name)+"\"))) {\n\
-        fprintf(stderr, \""+(lib_base_name.size()?std::string(lib_base_name)+"_":"")+
-        base_name+"_read() failed: failed locating ["+t.name+"] table\");\n\
+        fprintf(stderr, \""+ base_name+"_read() failed: failed locating ["+t.name+"] table\");\n\
         return 1;\n    }\n";
         for (const Table* c: t.children) {
             check_r(*c);
@@ -418,55 +419,55 @@ int )";
             switch (f.type) {
                 case Field::Type::t_int:
                     this->out += "    datum = toml_int_in("+get_path(t,t.name)+", \""+tvar(f.name)+"\");\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+" = datum.u.i;\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+" = datum.u.i;\n";
                     break;
                 case Field::Type::t_double:
                     this->out += "    datum = toml_double_in("+get_path(t,t.name)+", \""+tvar(f.name)+"\");\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+" = datum.u.d;\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+" = datum.u.d;\n";
                     break;
                 case Field::Type::t_bool:
                     this->out += "    datum = toml_bool_in("+get_path(t,t.name)+", \""+tvar(f.name)+"\");\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+" = datum.u.b;\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+" = datum.u.b;\n";
                     break;
                 case Field::Type::t_string:
                     this->out += "    datum = toml_string_in("+get_path(t,t.name)+", \""+tvar(f.name)+"\");\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+" = datum.u.s;\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+" = datum.u.s;\n";
                     break;
 
                 case Field::Type::t_array_of_int:
                     this->out += "    arr = toml_array_in("+get_path(t,t.name)+", \""+tvar(f.name)+"\");\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+" = malloc(toml_array_nelem(arr) * sizeof(int64_t));\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+" = malloc(toml_array_nelem(arr) * sizeof(int64_t));\n";
                     this->out += "    for (int i = 0; i < toml_array_nelem(arr); ++i) {\n        datum = toml_int_at(arr, i);\n";
-                    this->out += "        (*"+base_name+")->"+get_path_var(t, f.name)+"[i] = datum.u.i;\n";
+                    this->out += "        (*"+this->o_var+")->"+get_path_var(t, f.name)+"[i] = datum.u.i;\n";
                     this->out += "    }\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+"_len = toml_array_nelem(arr);\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+"_len = toml_array_nelem(arr);\n";
                     break;
 
                 case Field::Type::t_array_of_double:
                     this->out += "    arr = toml_array_in("+get_path(t,t.name)+", \""+tvar(f.name)+"\");\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+" = malloc(toml_array_nelem(arr) * sizeof(double));\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+" = malloc(toml_array_nelem(arr) * sizeof(double));\n";
                     this->out += "    for (int i = 0; i < toml_array_nelem(arr); ++i) {\n        datum = toml_double_at(arr, i);\n";
-                    this->out += "        (*"+base_name+")->"+get_path_var(t, f.name)+"[i] = datum.u.d;\n";
+                    this->out += "        (*"+this->o_var+")->"+get_path_var(t, f.name)+"[i] = datum.u.d;\n";
                     this->out += "    }\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+"_len = toml_array_nelem(arr);\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+"_len = toml_array_nelem(arr);\n";
                     break;
 
                 case Field::Type::t_array_of_bool:
                     this->out += "    arr = toml_array_in("+get_path(t,t.name)+", \""+tvar(f.name)+"\");\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+" = malloc(toml_array_nelem(arr) * sizeof(double));\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+" = malloc(toml_array_nelem(arr) * sizeof(double));\n";
                     this->out += "    for (int i = 0; i < toml_array_nelem(arr); ++i) {\n        datum = toml_bool_at(arr, i);\n";
-                    this->out += "        (*"+base_name+")->"+get_path_var(t, f.name)+"[i] = datum.u.b;\n";
+                    this->out += "        (*"+this->o_var+")->"+get_path_var(t, f.name)+"[i] = datum.u.b;\n";
                     this->out += "    }\n";
-                    this->out +=      "(*"+base_name+")->"+get_path_var(t, f.name)+"_len = toml_array_nelem(arr);\n";
+                    this->out +=      "(*"+this->o_var+")->"+get_path_var(t, f.name)+"_len = toml_array_nelem(arr);\n";
                     break;
 
                 case Field::Type::t_array_of_string:
                     this->out += "    arr = toml_array_in("+get_path(t,t.name)+", \""+tvar(f.name)+"\");\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+" = malloc(toml_array_nelem(arr) * sizeof(char*));\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+" = malloc(toml_array_nelem(arr) * sizeof(char*));\n";
                     this->out += "    for (int i = 0; i < toml_array_nelem(arr); ++i) {\n        datum = toml_string_at(arr, i);\n";
-                    this->out += "        (*"+base_name+")->"+get_path_var(t, f.name)+"[i] = datum.u.s;\n";
+                    this->out += "        (*"+this->o_var+")->"+get_path_var(t, f.name)+"[i] = datum.u.s;\n";
                     this->out += "    }\n";
-                    this->out += "    (*"+base_name+")->"+get_path_var(t, f.name)+"_len = toml_array_nelem(arr);\n";
+                    this->out += "    (*"+this->o_var+")->"+get_path_var(t, f.name)+"_len = toml_array_nelem(arr);\n";
                     break;
 
                 default:
@@ -480,51 +481,50 @@ int )";
     read_r(root);
 
     this->out += "\n    toml_free(root);\n    return 0;\n}\n\n";
-    this->out += "void "+(lib_base_name.size() ? std::string(lib_base_name)+"_" :"")+
-                 base_name+"_print(const "+name+"* "+base_name+") {\n";
-    this->out += "    printf(\"Read "+base_name+".toml values:\\n\");\n\n";
+    this->out += "void "+ base_name+"_print(const "+name+"* "+this->o_var+") {\n";
+    this->out += "    printf(\"Read "+this->o_name+".toml values:\\n\");\n\n";
 
     std::function<void(const Table&)> print_r;
     print_r = [&] (const Table& t)->void {
         for (const Field& f: t.fields) {
             switch (f.type) {
                 case Field::Type::t_int:
-                    this->out += "    printf(\""+base_name+"."+get_path_var(t,f.name)+" = %ld\\n\", "+base_name+"->"+get_path_var(t,f.name)+");\n";
+                    this->out += "    printf(\""+this->o_var+"."+get_path_var(t,f.name)+" = %ld\\n\", "+this->o_var+"->"+get_path_var(t,f.name)+");\n";
                     break;
 
                 case Field::Type::t_double:
-                    this->out += "    printf(\""+base_name+"."+get_path_var(t,f.name)+" = %lf\\n\", "+base_name+"->"+get_path_var(t,f.name)+");\n";
+                    this->out += "    printf(\""+this->o_var+"."+get_path_var(t,f.name)+" = %lf\\n\", "+this->o_var+"->"+get_path_var(t,f.name)+");\n";
                     break;
 
                 case Field::Type::t_bool:
-                    this->out += "    printf(\""+base_name+"."+get_path_var(t,f.name)+" = %s\\n\", "+base_name+"->"+get_path_var(t,f.name)+"? \"true\":\"false\");\n";
+                    this->out += "    printf(\""+this->o_var+"."+get_path_var(t,f.name)+" = %s\\n\", "+this->o_var+"->"+get_path_var(t,f.name)+"? \"true\":\"false\");\n";
                     break;
 
                 case Field::Type::t_string:
-                    this->out += "    printf(\""+base_name+"."+get_path_var(t,f.name)+" = %s\\n\", "+base_name+"->"+get_path_var(t,f.name)+");\n";
+                    this->out += "    printf(\""+this->o_var+"."+get_path_var(t,f.name)+" = %s\\n\", "+this->o_var+"->"+get_path_var(t,f.name)+");\n";
                     break;
 
                 case Field::Type::t_array_of_int:
-                    this->out += "    for (int i = 0; i < "+base_name+"->"+get_path_var(t, f.name)+"_len; ++i) {\n";
-                    this->out += "        printf(\""+base_name+"."+get_path_var(t,f.name)+"[%d] = %ld\\n\", i, "+base_name+"->"+get_path_var(t,f.name)+"[i]);\n";
+                    this->out += "    for (int i = 0; i < "+this->o_var+"->"+get_path_var(t, f.name)+"_len; ++i) {\n";
+                    this->out += "        printf(\""+this->o_var+"."+get_path_var(t,f.name)+"[%d] = %ld\\n\", i, "+this->o_var+"->"+get_path_var(t,f.name)+"[i]);\n";
                     this->out += "    };\n";
                     break;
 
                 case Field::Type::t_array_of_double:
-                    this->out += "    for (int i = 0; i < "+base_name+"->"+get_path_var(t, f.name)+"_len; ++i) {\n";
-                    this->out += "        printf(\""+base_name+"."+get_path_var(t,f.name)+"[%d] = %lf\\n\", i, "+base_name+"->"+get_path_var(t,f.name)+"[i]);\n";
+                    this->out += "    for (int i = 0; i < "+this->o_var+"->"+get_path_var(t, f.name)+"_len; ++i) {\n";
+                    this->out += "        printf(\""+this->o_var+"."+get_path_var(t,f.name)+"[%d] = %lf\\n\", i, "+this->o_var+"->"+get_path_var(t,f.name)+"[i]);\n";
                     this->out += "    };\n";
                     break;
 
                 case Field::Type::t_array_of_bool:
-                    this->out += "    for (int i = 0; i < "+base_name+"->"+get_path_var(t, f.name)+"_len; ++i) {\n";
-                    this->out += "        printf(\""+base_name+"."+get_path_var(t,f.name)+"[%d] = %s\\n\", i, "+base_name+"->"+get_path_var(t,f.name)+"[i]?\"true\":\"false\");\n";
+                    this->out += "    for (int i = 0; i < "+this->o_var+"->"+get_path_var(t, f.name)+"_len; ++i) {\n";
+                    this->out += "        printf(\""+this->o_var+"."+get_path_var(t,f.name)+"[%d] = %s\\n\", i, "+this->o_var+"->"+get_path_var(t,f.name)+"[i]?\"true\":\"false\");\n";
                     this->out += "    };\n";
                     break;
 
                 case Field::Type::t_array_of_string:
-                    this->out += "    for (int i = 0; i < "+base_name+"->"+get_path_var(t, f.name)+"_len; ++i) {\n";
-                    this->out += "        printf(\""+base_name+"."+get_path_var(t,f.name)+"[%d] = %s\\n\", i, "+base_name+"->"+get_path_var(t,f.name)+"[i]);\n";
+                    this->out += "    for (int i = 0; i < "+this->o_var+"->"+get_path_var(t, f.name)+"_len; ++i) {\n";
+                    this->out += "        printf(\""+this->o_var+"."+get_path_var(t,f.name)+"[%d] = %s\\n\", i, "+this->o_var+"->"+get_path_var(t,f.name)+"[i]);\n";
                     this->out += "    };\n";
                     break;
 
@@ -539,7 +539,7 @@ int )";
     print_r(root);
 
     this->out += "\n    fflush(stdout);\n}\n\n";
-    this->out += "    void "+(lib_base_name.size()?std::string(lib_base_name)+"_":"")+base_name+"_free("+name+"* "+base_name+") {\n";
+    this->out += "void "+base_name+"_free("+name+"* "+this->o_var+") {\n";
 
     std::function<void(const Table&)> free_r;
     free_r = [&] (const Table& t)->void {
@@ -549,14 +549,14 @@ int )";
                 case Field::Type::t_array_of_int:
                 case Field::Type::t_array_of_bool:
                 case Field::Type::t_array_of_double:
-                    this->out += "    free("+base_name+"->"+get_path_var(t, f.name)+");\n";
+                    this->out += "    free("+this->o_var+"->"+get_path_var(t, f.name)+");\n";
                     break;
 
                 case Field::Type::t_array_of_string:
-                    this->out += "    for (int i = 0; i < "+base_name+"->"+get_path_var(t, f.name)+"_len; ++i) {\n";
-                    this->out += "        free("+base_name+"->"+get_path_var(t, f.name)+"[i]);\n";
+                    this->out += "    for (int i = 0; i < "+this->o_var+"->"+get_path_var(t, f.name)+"_len; ++i) {\n";
+                    this->out += "        free("+this->o_var+"->"+get_path_var(t, f.name)+"[i]);\n";
                     this->out += "    }\n";
-                    this->out += "    free("+base_name+"->"+get_path_var(t, f.name)+");\n";
+                    this->out += "    free("+this->o_var+"->"+get_path_var(t, f.name)+");\n";
                     break;
 
                 default:
@@ -569,12 +569,12 @@ int )";
     };
     free_r(root);
 
-    this->out += "\n    free("+base_name+");\n}\n";
+    this->out += "\n    free("+this->o_var+");\n}\n";
 }
 
 void Writer::c_finalize() {
     std::ofstream src;
-    src.open((lib_base_name.size()?std::string(lib_base_name)+"-":"")+this->o_name+".c");
+    src.open(LIB_BASE_NAMEh+this->o_name+".c");
     src << out;
     src.close();
 }
@@ -591,6 +591,7 @@ void Writer::write(const std::string& name, const Table& root) {
     if (pext != std::string::npos) {
         this->o_name = this->o_name.substr(0, pext);
     }
+    this->o_var = cvar(this->o_name);
 
     this->h_header();
     this->h_struct(root);

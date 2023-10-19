@@ -9,11 +9,13 @@ The TOML2C compiler requires [toml++](https://github.com/marzer/tomlplusplus) in
 
 Compile with `g++ toml2c.cpp -o t2c`.
 Run `./t2c FILE.toml`, to generate the C code for FILE.toml.
-Outputs a `t2c-FILE.h` and a `t2c-FILE.c` which can then be used as a library.
+
+By default the output files and functions will be prefixed with `t2c`.
+This can be changed by modifying the variable `lib_base_name` in the source code.
 
 ## Usage
+The above outputs a `t2c-FILE.h` and a `t2c-FILE.c` which can be used as a library.
 To use the compiled C code, [tomlc99](https://github.com/cktan/tomlc99) needs to be installed.
-
 
 ## Example
 ```TOML
@@ -35,7 +37,7 @@ children = ["Margot", "Angel"]
 
 int main() {
     // NULL ptr or zero-initialized struct
-    pet_t* pet = NULL;
+    t2c_pet_t* pet = NULL;
 
     // Read toml file into pet
     if (t2c_pet_read("pet.toml", &pet)) {
