@@ -540,6 +540,9 @@ int )";
 
     this->out += "\n    fflush(stdout);\n}\n\n";
     this->out += "void "+base_name+"_free("+name+"* "+this->o_var+") {\n";
+    this->out += "    if (!" + this->o_var +") {\n";
+    this->out += "        return;\n";
+    this->out += "    }\n";
 
     std::function<void(const Table&)> free_r;
     free_r = [&] (const Table& t)->void {
